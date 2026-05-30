@@ -32,9 +32,7 @@ top-level `openapi:` or `swagger:` key.
 ## Quick start (Neovim, recommended)
 
 With [lazy.nvim](https://github.com/folke/lazy.nvim), this single spec installs
-the binary, rebuilds it on every plugin update, and attaches it to OpenAPI
-buffers — nothing else to install or wire up. Requires a Go toolchain on
-`PATH`.
+Requires a Go toolchain on `PATH`.
 
 ```lua
 -- ~/.config/nvim/lua/plugins/oapi-lsp.lua
@@ -67,8 +65,6 @@ return {
   end,
 }
 ```
-
-Keep your `yaml-language-server` setup as-is; both attach to the same buffer.
 
 ## Manual install
 
@@ -103,13 +99,6 @@ extra configuration:
 - **fzf-lua** (`lsp_document_symbols` / `lsp_live_workspace_symbols`)
 - **snacks.nvim** (`Snacks.picker.lsp_symbols` / `lsp_workspace_symbols`)
 - **mini.pick**, and any other picker that consumes LSP symbols
-
-## Mason
-
-`oapi-lsp` is not in the [Mason](https://github.com/mason-org/mason.nvim)
-registry yet, so it can't be installed with `:MasonInstall` today. The
-lazy.nvim spec above already gives you Mason-like convenience (install + update
-in one place). A registry entry may be added later.
 
 ## Development
 
