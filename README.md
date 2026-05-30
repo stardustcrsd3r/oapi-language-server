@@ -20,14 +20,27 @@ alongside this one is recommended for the full experience, but not required:
   `./schemas/User.yaml#/…`.
 - **Find references** — from a definition key (or a `$ref`), every `$ref` that
   targets it, across the whole workspace.
-- **Document symbols** — a *Paths* tree (`METHOD /path`) and a *Components* tree,
-  for the outline and symbol picker.
-- **Workspace symbols** — fuzzy-find every operation and component across all
-  specs in the workspace.
+- **Document symbols** — a *Paths* tree (`METHOD /path`) and a *Components* tree
+  for the outline and symbol picker. A referenced fragment file that isn't a
+  spec itself (e.g. a bare `schemas/User.yaml`) is outlined by its definitions.
+- **Workspace symbols** — fuzzy-find every operation and component across the
+  workspace.
 
-Multi-file `$ref` works out of the box; referenced files need not be specs
-themselves. A file is treated as a spec when one of its first lines has a
-top-level `openapi:` or `swagger:` key.
+## Split specs
+
+Multi-file specs work out of the box — referenced files need not be specs
+themselves:
+
+- **Schemas in separate files** show up in the symbol pickers, whether they live
+  in a shared `components:` file or as a bare `schemas/User.yaml` fragment.
+- **Operations behind a path-item `$ref`** (`/users: { $ref: ./paths/users.yaml }`)
+  are listed as `METHOD /path`, pointing into the referenced file.
+- **Shared component files** are surfaced even before anything references them,
+  so you can jump to a schema while you're still wiring it up.
+
+A file is treated as a spec when one of its first lines has a top-level
+`openapi:` or `swagger:` key; everything reachable from a spec via `$ref` is
+part of the same navigable workspace.
 
 ## Quick start (Neovim, recommended)
 
