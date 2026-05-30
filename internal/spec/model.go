@@ -20,6 +20,23 @@ type Component struct {
 	KeyRange protocol.Range // range of the name key
 }
 
+// PathRef is a path-item-level $ref (paths./users: {$ref: ./paths/users.yaml}),
+// where the whole path item — and thus its operations — lives in another file.
+type PathRef struct {
+	Path      string
+	File      string         // external file part; empty for internal refs
+	Pointer   string         // JSON pointer incl. leading '/'; empty for whole-file
+	PathRange protocol.Range // range of the path key (/users:)
+}
+
+// MethodEntry is one HTTP-method key of a path item, with its key range.
+type MethodEntry struct {
+	Method      string // upper-cased HTTP method
+	OperationID string
+	Summary     string
+	Range       protocol.Range
+}
+
 // RefUse is a single $ref occurrence.
 type RefUse struct {
 	Raw     string

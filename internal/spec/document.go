@@ -27,6 +27,7 @@ type Document struct {
 	Operations []Operation
 	Components []Component
 	Refs       []RefUse
+	PathRefs   []PathRef
 
 	targets map[string]protocol.Range // pointer -> definition key range
 }
@@ -59,6 +60,15 @@ func (d *Document) index() {
 		for _, pmv := range mapValues(paths.Value) {
 			path := keyString(pmv)
 			if !strings.HasPrefix(path, "/") {
+				continue
+			}
+			// A path-item-level $ref keeps the operations in another file; record
+			// it so the workspace can expand them, and skip the inline scan.
+			if ref := refChild(pmv.Value); ref != nil {
+				d.PathRefs = append(d.PathRefs, PathRef{
+					Path: path, File: ref.File, Pointer: ref.Pointer,
+					PathRange: d.nodeRange(pmv.Key),
+				})
 				continue
 			}
 			for _, mmv := range mapValues(pmv.Value) {
@@ -124,6 +134,79 @@ func (d *Document) ContextAt(p protocol.Position) Context {
 		}
 	}
 	return Context{Kind: ContextNone}
+}
+
+// PathItemMethods returns the HTTP-method entries of the path item at pointer
+// (or the document root when pointer is ""), each with its key range. It lets
+// the workspace expand a path-item-level $ref into METHOD /path symbols.
+func (d *Document) PathItemMethods(pointer string) []MethodEntry {
+	node := d.root
+	if pointer != "" {
+		mv := resolvePointer(d.root, PointerSegments(pointer))
+		if mv == nil {
+			return nil
+		}
+		node = mv.Value
+	}
+	var out []MethodEntry
+	for _, mmv := range mapValues(node) {
+		m := keyString(mmv)
+		if httpMethods[strings.ToLower(m)] {
+			out = append(out, MethodEntry{
+				Method:      strings.ToUpper(m),
+				OperationID: scalarChild(mmv.Value, "operationId"),
+				Summary:     scalarChild(mmv.Value, "summary"),
+				Range:       d.nodeRange(mmv.Key),
+			})
+		}
+	}
+	return out
+}
+
+// IsPathItem reports whether the document's root is a path item (its top-level
+// keys include HTTP methods). Such fragments are surfaced as operations, not as
+// schema-like symbols.
+func (d *Document) IsPathItem() bool {
+	for _, mv := range mapValues(d.root) {
+		if httpMethods[strings.ToLower(keyString(mv))] {
+			return true
+		}
+	}
+	return false
+}
+
+// schemaKeywords mark a mapping as a schema body rather than a map of named
+// definitions, so a whole file of them is one definition (named by file).
+var schemaKeywords = map[string]bool{
+	"type": true, "properties": true, "allOf": true, "anyOf": true,
+	"oneOf": true, "items": true, "required": true, "enum": true,
+	"$ref": true, "additionalProperties": true, "format": true,
+	"nullable": true, "discriminator": true,
+}
+
+// TopLevelDefs returns the named definitions of a non-spec fragment file for the
+// document outline: one entry per top-level mapping key, or — when the file is a
+// single schema body — one entry named after the file.
+func (d *Document) TopLevelDefs() []Component {
+	tops := mapValues(d.root)
+	if len(tops) == 0 {
+		return nil
+	}
+	for _, mv := range tops {
+		if schemaKeywords[keyString(mv)] {
+			return []Component{{
+				Name: fileStem(d.URI), Kind: "schemas",
+				KeyRange: d.nodeRange(tops[0].Key),
+			}}
+		}
+	}
+	out := make([]Component, 0, len(tops))
+	for _, mv := range tops {
+		out = append(out, Component{
+			Name: keyString(mv), Kind: "schemas", KeyRange: d.nodeRange(mv.Key),
+		})
+	}
+	return out
 }
 
 // PointerAt returns the JSON pointer of the mapping key at an LSP position, or
@@ -240,6 +323,21 @@ func keyString(mv *ast.MappingValueNode) string {
 		return ""
 	}
 	return mv.Key.GetToken().Value
+}
+
+// refChild returns the parsed $ref of a mapping node whose (only meaningful)
+// key is "$ref", or nil when the node is not a $ref wrapper.
+func refChild(n ast.Node) *Ref {
+	mv := findKey(n, "$ref")
+	if mv == nil {
+		return nil
+	}
+	s, ok := mv.Value.(*ast.StringNode)
+	if !ok {
+		return nil
+	}
+	r := ParseRef(s.Value)
+	return &r
 }
 
 func findKey(n ast.Node, key string) *ast.MappingValueNode {
