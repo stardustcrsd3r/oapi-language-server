@@ -1,0 +1,13 @@
+openapi: 3.0.3
+info:
+  title: Split
+paths:
+  /users:
+    $ref: './paths/users.yaml'
+components:
+  schemas:
+    Wrapper:
+      type: object
+      properties:
+        user:
+          $ref: './schemas/User.yaml'
