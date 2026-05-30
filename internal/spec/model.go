@@ -8,7 +8,8 @@ type Operation struct {
 	Path        string
 	OperationID string
 	Summary     string
-	KeyRange    protocol.Range // range of the method key
+	KeyRange    protocol.Range // range of the method key (get:/post:/…)
+	PathRange   protocol.Range // range of the parent path key (/users/{id}:)
 }
 
 // Component is a components.<kind>.<name> definition.

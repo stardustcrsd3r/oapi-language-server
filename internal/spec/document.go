@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"bytes"
 	"strings"
 
 	"github.com/goccy/go-yaml/ast"
@@ -71,6 +72,7 @@ func (d *Document) index() {
 					OperationID: scalarChild(mmv.Value, "operationId"),
 					Summary:     scalarChild(mmv.Value, "summary"),
 					KeyRange:    d.nodeRange(mmv.Key),
+					PathRange:   d.nodeRange(pmv.Key),
 				})
 			}
 		}
@@ -174,22 +176,36 @@ func (d *Document) InternalRefsTo(pointer string) []protocol.Range {
 	return out
 }
 
-// byteStart returns the 0-based byte offset of a token's value. goccy reports
-// token.Position.Offset as a 1-based offset, so we subtract one.
-func byteStart(n ast.Node) int {
-	return max(n.GetToken().Position.Offset-1, 0)
+// tokenByteRange computes the [start,end) byte offsets of a token's value by
+// locating it on its (1-based) source line. goccy reports a reliable Line but
+// an unreliable Column/Offset for multibyte (non-ASCII) text — it mixes rune
+// and byte counts — so we search the line for the value text rather than trust
+// the reported column.
+func (d *Document) tokenByteRange(n ast.Node) (int, int) {
+	tok := n.GetToken()
+	line := tok.Position.Line - 1 // goccy Line is 1-based
+	lineStart := d.conv.LineStart(line)
+	lineText := d.conv.LineText(line)
+	val := []byte(tok.Value)
+
+	col := bytes.Index(lineText, val)
+	if col < 0 {
+		// Fallback: span the line from its first non-space character.
+		indent := len(lineText) - len(bytes.TrimLeft(lineText, " \t"))
+		return lineStart + indent, lineStart + len(lineText)
+	}
+	return lineStart + col, lineStart + col + len(val)
 }
 
 func (d *Document) nodeRange(n ast.Node) protocol.Range {
-	start := byteStart(n)
-	return d.conv.Range(start, start+len(n.GetToken().Value))
+	start, end := d.tokenByteRange(n)
+	return d.conv.Range(start, end)
 }
 
 // valueRange is like nodeRange but expands to include surrounding quote
 // characters, so the cursor still hits when placed on a quote.
 func (d *Document) valueRange(n ast.Node) protocol.Range {
-	start := byteStart(n)
-	end := start + len(n.GetToken().Value)
+	start, end := d.tokenByteRange(n)
 	if start > 0 && isQuote(d.src[start-1]) {
 		start--
 	}

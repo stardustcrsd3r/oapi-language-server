@@ -1,8 +1,10 @@
 // Package yamlpos converts byte offsets in YAML source into LSP positions.
 //
-// LSP positions are zero-based, and the character field counts UTF-16 code
-// units (not bytes or runes). goccy/go-yaml reports token positions as
-// zero-based byte offsets, so we translate offset -> {line, utf16-character}.
+// LSP positions are zero-based and the character field counts UTF-16 code units
+// (not bytes or runes), so we translate a byte offset into {line, utf16-char}.
+// Callers compute byte offsets from goccy's (reliable) 1-based Line plus an
+// in-line search, because goccy's reported Column/Offset are unreliable on
+// multibyte text — they mix rune and byte counts.
 package yamlpos
 
 import (
@@ -26,6 +28,37 @@ func NewConverter(src []byte) *Converter {
 		}
 	}
 	return &Converter{src: src, lineStarts: starts}
+}
+
+// LineCount returns the number of lines in the source.
+func (c *Converter) LineCount() int { return len(c.lineStarts) }
+
+// LineStart returns the byte offset of the start of a 0-based line, or the end
+// of the source if the line is out of range.
+func (c *Converter) LineStart(line int) int {
+	if line < 0 {
+		return 0
+	}
+	if line >= len(c.lineStarts) {
+		return len(c.src)
+	}
+	return c.lineStarts[line]
+}
+
+// LineText returns the bytes of a 0-based line, excluding the trailing newline.
+func (c *Converter) LineText(line int) []byte {
+	if line < 0 || line >= len(c.lineStarts) {
+		return nil
+	}
+	start := c.lineStarts[line]
+	end := len(c.src)
+	if line+1 < len(c.lineStarts) {
+		end = c.lineStarts[line+1] - 1 // drop '\n'
+	}
+	if end < start {
+		end = start
+	}
+	return c.src[start:end]
 }
 
 // Position returns the LSP position for a byte offset.

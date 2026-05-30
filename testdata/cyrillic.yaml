@@ -1,0 +1,46 @@
+openapi: "3.0.3"
+info:
+  version: "1.0.0"
+  title: "Тестовый API"
+  description: Сервис для проверки позиций на кириллице
+tags:
+  - name: Профиль
+    description: Методы профиля пользователя
+paths:
+  /users/{id}:
+    get:
+      operationId: getUser
+      summary: Получить пользователя по идентификатору
+      responses:
+        '200':
+          description: Пользователь найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    delete:
+      operationId: deleteUser
+      summary: Удалить пользователя
+      responses:
+        '204':
+          description: Удалён
+  /pets:
+    post:
+      operationId: createPet
+      summary: Создать питомца
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pet'
+components:
+  schemas:
+    User:
+      type: object
+      description: Профиль пользователя сервиса
+      properties:
+        pet:
+          $ref: '#/components/schemas/Pet'
+    Pet:
+      type: object
+      description: Питомец пользователя
