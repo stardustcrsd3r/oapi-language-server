@@ -1,0 +1,27 @@
+openapi: 3.0.3
+info:
+  title: Multifile
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/User.yaml#/User'
+    post:
+      operationId: createUser
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/User.yaml#/User'
+components:
+  schemas:
+    Wrapper:
+      type: object
+      properties:
+        user:
+          $ref: './schemas/User.yaml#/User'
