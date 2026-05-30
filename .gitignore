@@ -1,0 +1,4 @@
+/oapi-lsp
+/dist/
+*.test
+*.out
