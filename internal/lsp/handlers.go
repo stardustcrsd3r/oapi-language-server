@@ -82,7 +82,7 @@ func (s *Server) workspaceSymbol(ctx *glsp.Context, params *protocol.WorkspaceSy
 			if matchQuery(q, name) {
 				out = append(out, protocol.SymbolInformation{
 					Name: name, Kind: protocol.SymbolKindMethod,
-					Location: protocol.Location{URI: d.URI, Range: op.KeyRange},
+					Location: protocol.Location{URI: d.URI, Range: op.PathRange},
 				})
 			}
 		}
@@ -111,8 +111,8 @@ func buildDocumentSymbols(doc *spec.Document) []protocol.DocumentSymbol {
 				Name:           op.Method + " " + op.Path,
 				Detail:         detailPtr(op.OperationID, op.Summary),
 				Kind:           protocol.SymbolKindMethod,
-				Range:          op.KeyRange,
-				SelectionRange: op.KeyRange,
+				Range:          op.PathRange,
+				SelectionRange: op.PathRange,
 			})
 		}
 		syms = append(syms, container("Paths", children))
