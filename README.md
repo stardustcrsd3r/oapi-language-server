@@ -1,160 +1,115 @@
 # oapi-language-server
 
-An editor-agnostic [Language Server](https://microsoft.github.io/language-server-protocol/)
-for OpenAPI / Swagger YAML specs.
+A [Language Server](https://microsoft.github.io/language-server-protocol/) for
+OpenAPI / Swagger YAML specs.
 
-It provides the navigation that `yaml-language-server` does not: jumping between
-`$ref` declarations and their definitions (internal **and** across files), and
-listing operations and components through your editor's normal symbol pickers.
-It is designed to run **alongside** `yaml-language-server`, which keeps doing
-schema validation, completion and hover.
+It provides the navigation that general YAML tooling doesn't understand: jumping
+between `$ref` declarations and their definitions (internal **and** across
+files), and listing operations and components through your editor's symbol
+picker.
 
----
-
-## Why a separate server?
-
-`yaml-language-server` is excellent at JSON-Schema validation, but its
-go-to-definition only resolves YAML anchors/aliases — **not** OpenAPI `$ref`
-JSON-pointers — and it has no find-references for them
-([yaml-language-server#1016](https://github.com/redhat-developer/yaml-language-server/issues/1016)).
-
-This server fills exactly that gap. Because every feature maps onto a standard
-LSP method, your existing symbol picker — Telescope, fzf-lua, snacks, the native
-picker, VS Code, Helix, Zed — consumes them for free, with no plugin to install.
-
----
+It does **not** do schema validation, completion or hover — those are best left
+to a general YAML language server. Running one (e.g.
+[`yaml-language-server`](https://github.com/redhat-developer/yaml-language-server))
+alongside this one is recommended for the full experience, but not required:
+`oapi-lsp` works on its own for `$ref` navigation and symbols.
 
 ## Features
 
-| LSP method                    | Trigger (typical)        | What you get                                                                 |
-| ----------------------------- | ------------------------ | --------------------------------------------------------------------------- |
-| `textDocument/definition`     | `gd`, `<C-]>`            | Jump from a `$ref` to its definition — internal `#/…` **or** `./file.yaml#/…`. |
-| `textDocument/references`     | `gr`                     | From a definition key (or a `$ref`), list every `$ref` to it — **across files**. |
-| `textDocument/documentSymbol` | `gO`, symbol picker      | A *Paths* tree (`METHOD /path`, with `operationId`/`summary`) and a *Components* tree grouped by kind. |
-| `workspace/symbol`            | workspace-symbol picker  | Fuzzy-find every operation and component across the whole workspace.         |
+- **Go to definition** on a `$ref` — internal `#/components/…` or cross-file
+  `./schemas/User.yaml#/…`.
+- **Find references** — from a definition key (or a `$ref`), every `$ref` that
+  targets it, across the whole workspace.
+- **Document symbols** — a *Paths* tree (`METHOD /path`) and a *Components* tree,
+  for the outline and symbol picker.
+- **Workspace symbols** — fuzzy-find every operation and component across all
+  specs in the workspace.
 
-Notes:
+Multi-file `$ref` works out of the box; referenced files need not be specs
+themselves. A file is treated as a spec when one of its first lines has a
+top-level `openapi:` or `swagger:` key.
 
-- **Multi-file `$ref`** works out of the box. External files (e.g.
-  `schemas/User.yaml`) are indexed even when they aren't specs themselves, so
-  definition and references reach into and out of them.
-- **Detection**: a YAML file is treated as a spec when one of its first lines
-  has a top-level `openapi:` or `swagger:` key. Plain YAML is left alone.
-- Validation, completion, hover and rename are intentionally **delegated to
-  `yaml-language-server`** — run both together.
+## Quick start (Neovim, recommended)
 
----
+With [lazy.nvim](https://github.com/folke/lazy.nvim), this single spec installs
+the binary, rebuilds it on every plugin update, and attaches it to OpenAPI
+buffers — nothing else to install or wire up. Requires a Go toolchain on
+`PATH`.
 
-## Installation
+```lua
+-- ~/.config/nvim/lua/plugins/oapi-lsp.lua
+return {
+  "stardustcrsd3r/oapi-language-server",
+  build = "go install ./cmd/oapi-lsp",
+  ft = "yaml",
+  config = function()
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "yaml",
+      callback = function(args)
+        local head = vim.api.nvim_buf_get_lines(args.buf, 0, 20, false)
+        local is_spec = false
+        for _, l in ipairs(head) do
+          if l:match("^%s*openapi%s*:") or l:match("^%s*swagger%s*:") then
+            is_spec = true
+            break
+          end
+        end
+        if not is_spec then
+          return
+        end
+        vim.lsp.start({
+          name = "oapi-lsp",
+          cmd = { vim.fn.expand("$HOME/go/bin/oapi-lsp") },
+          root_dir = vim.fs.root(args.buf, { ".git" }) or vim.fn.getcwd(),
+        }, { bufnr = args.buf })
+      end,
+    })
+  end,
+}
+```
 
-You need a Go toolchain (1.21+).
+Keep your `yaml-language-server` setup as-is; both attach to the same buffer.
+
+## Manual install
 
 ```sh
 go install github.com/stardustcrsd3r/oapi-language-server/cmd/oapi-lsp@latest
 ```
 
-This puts an `oapi-lsp` binary in `$(go env GOPATH)/bin` — make sure that's on
-your `PATH`. Verify:
+This puts an `oapi-lsp` binary in `$(go env GOPATH)/bin` (usually `~/go/bin`) —
+make sure that's on your `PATH`, then point any LSP client's command at
+`oapi-lsp` for YAML files.
 
-```sh
-oapi-lsp --version
-```
+## Other editors
 
-Also install `yaml-language-server` for validation/completion (optional but
-recommended):
+`oapi-lsp` speaks LSP over stdio, so any LSP client works — launch `oapi-lsp`
+and route `yaml` documents to it. The features show up under each editor's
+standard commands:
 
-```sh
-npm install -g yaml-language-server
-```
+- **VS Code** — *Go to Definition*, *Find References*, *Go to Symbol*
+  (`Ctrl+Shift+O`) / *Workspace Symbol* (`Ctrl+T`), via a generic LSP-bridge
+  extension pointing at `oapi-lsp`.
+- **Helix / Zed** — register a language server named `oapi-lsp` with command
+  `oapi-lsp` for the `yaml` language.
 
----
-
-## Neovim setup (0.10+)
-
-The server needs no plugin — just start it for YAML buffers. Pick **one** of the
-approaches below.
-
-### A. Plain `vim.lsp.start` (no dependencies)
-
-```lua
-vim.api.nvim_create_autocmd("FileType", {
-  pattern = "yaml",
-  callback = function()
-    vim.lsp.start({
-      name = "oapi-lsp",
-      cmd = { "oapi-lsp" },
-      root_dir = vim.fs.root(0, { ".git" }) or vim.fn.getcwd(),
-    })
-  end,
-})
-```
-
-### B. With `nvim-lspconfig` (alongside `yamlls`)
-
-```lua
--- Register a custom config once.
-local configs = require("lspconfig.configs")
-local lspconfig = require("lspconfig")
-
-if not configs.oapi_lsp then
-  configs.oapi_lsp = {
-    default_config = {
-      cmd = { "oapi-lsp" },
-      filetypes = { "yaml" },
-      root_dir = lspconfig.util.root_pattern(".git", "openapi.yaml", "openapi.yml"),
-      single_file_support = true,
-    },
-  }
-end
-
-lspconfig.oapi_lsp.setup({})
-lspconfig.yamlls.setup({})  -- validation/completion/hover
-```
-
-### Keymaps
-
-These are the standard LSP keymaps — bind them in your `LspAttach` autocmd if you
-don't already:
-
-```lua
-vim.api.nvim_create_autocmd("LspAttach", {
-  callback = function(args)
-    local opts = { buffer = args.buf }
-    vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)  -- $ref -> definition
-    vim.keymap.set("n", "gr", vim.lsp.buf.references, opts)  -- find all $refs
-    vim.keymap.set("n", "gO", vim.lsp.buf.document_symbol, opts)
-  end,
-})
-```
-
----
-
-## Symbol pickers
+## Symbol pickers (Neovim)
 
 Operations and components are served as standard `textDocument/documentSymbol`
 and `workspace/symbol` results, so any LSP-aware symbol picker works with no
-extra configuration — the data comes from the server. Compatible with:
+extra configuration:
 
-- **Native** Neovim (`vim.lsp.buf.document_symbol` / `workspace_symbol`, `gO`)
+- **Native** (`vim.lsp.buf.document_symbol` / `workspace_symbol`, `gO`)
 - **Telescope** (`lsp_document_symbols` / `lsp_dynamic_workspace_symbols`)
 - **fzf-lua** (`lsp_document_symbols` / `lsp_live_workspace_symbols`)
 - **snacks.nvim** (`Snacks.picker.lsp_symbols` / `lsp_workspace_symbols`)
 - **mini.pick**, and any other picker that consumes LSP symbols
 
----
+## Mason
 
-## Other editors
-
-Launch `oapi-lsp` over stdio and route `yaml` documents to it; run
-`yaml-language-server` alongside. There are no configuration options.
-
-- **VS Code**: use a generic LSP bridge extension pointing `cmd` at `oapi-lsp`
-  for `yaml`. Symbols appear in *Go to Symbol* (`Ctrl+Shift+O`) and *Go to Symbol
-  in Workspace* (`Ctrl+T`).
-- **Helix / Zed**: add a language server named `oapi-lsp` with command
-  `oapi-lsp` for the `yaml` language, in addition to `yaml-language-server`.
-
----
+`oapi-lsp` is not in the [Mason](https://github.com/mason-org/mason.nvim)
+registry yet, so it can't be installed with `:MasonInstall` today. The
+lazy.nvim spec above already gives you Mason-like convenience (install + update
+in one place). A registry entry may be added later.
 
 ## Development
 
@@ -172,5 +127,5 @@ Layout:
 | `internal/lsp`      | glsp handlers wiring the index to LSP methods.                   |
 | `cmd/oapi-lsp`      | Entry point (stdio server).                                      |
 
-Built on [`goccy/go-yaml`](https://github.com/goccy/go-yaml) (AST with token
-positions) and [`tliron/glsp`](https://github.com/tliron/glsp) (LSP framework).
+Built on [`goccy/go-yaml`](https://github.com/goccy/go-yaml) and
+[`tliron/glsp`](https://github.com/tliron/glsp).
