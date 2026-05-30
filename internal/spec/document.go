@@ -174,18 +174,22 @@ func (d *Document) InternalRefsTo(pointer string) []protocol.Range {
 	return out
 }
 
+// byteStart returns the 0-based byte offset of a token's value. goccy reports
+// token.Position.Offset as a 1-based offset, so we subtract one.
+func byteStart(n ast.Node) int {
+	return max(n.GetToken().Position.Offset-1, 0)
+}
+
 func (d *Document) nodeRange(n ast.Node) protocol.Range {
-	tok := n.GetToken()
-	start := tok.Position.Offset
-	return d.conv.Range(start, start+len(tok.Value))
+	start := byteStart(n)
+	return d.conv.Range(start, start+len(n.GetToken().Value))
 }
 
 // valueRange is like nodeRange but expands to include surrounding quote
 // characters, so the cursor still hits when placed on a quote.
 func (d *Document) valueRange(n ast.Node) protocol.Range {
-	tok := n.GetToken()
-	start := tok.Position.Offset
-	end := start + len(tok.Value)
+	start := byteStart(n)
+	end := start + len(n.GetToken().Value)
 	if start > 0 && isQuote(d.src[start-1]) {
 		start--
 	}
