@@ -44,28 +44,57 @@ part of the same navigable workspace.
 
 ## Install
 
-- **Neovim via [Mason](https://github.com/mason-org/mason.nvim)** (recommended):
-  `:MasonInstall oapi-lsp`, or list it under `mason-tool-installer`. Mason
-  downloads the prebuilt binary and puts it on Neovim's `PATH`.
-- **Prebuilt binary**: grab the archive for your OS/arch from the
-  [releases page](https://github.com/stardustcrsd3r/oapi-language-server/releases),
-  extract `oapi-lsp`, and put it somewhere on your `PATH`.
-- **From source** (needs Go): `go install
-  github.com/stardustcrsd3r/oapi-language-server/cmd/oapi-lsp@latest` — drops the
-  binary in `$(go env GOPATH)/bin` (usually `~/go/bin`).
+`oapi-lsp` is a single static binary — no runtime needed. Two ways to get it:
+
+**From source** (needs a Go toolchain):
+
+```sh
+go install github.com/stardustcrsd3r/oapi-language-server/cmd/oapi-lsp@latest
+```
+
+Lands in `$(go env GOPATH)/bin` (usually `~/go/bin`); make sure that's on your
+`PATH`. Update by re-running the same command; pin a version with `@v0.1.0`
+instead of `@latest`.
+
+**Prebuilt binary** (no Go): download the archive for your OS/arch from the
+[releases page](https://github.com/stardustcrsd3r/oapi-language-server/releases),
+extract `oapi-lsp`, and put it on your `PATH` (e.g. `~/.local/bin`). Update by
+downloading a newer release and replacing the file.
 
 Then point any LSP client's command at `oapi-lsp` for YAML files.
 
-## Quick start (Neovim, recommended)
+## Quick start (Neovim)
 
-With [lazy.nvim](https://github.com/folke/lazy.nvim) and the binary installed via
-Mason (or otherwise on `PATH`), this single spec wires it up:
+With [lazy.nvim](https://github.com/folke/lazy.nvim). The `build` step below
+downloads the matching release binary on install and on every `:Lazy update`, so
+you never need Go — to force a re-download, run `:Lazy build oapi-language-server`.
 
 ```lua
 -- ~/.config/nvim/lua/plugins/oapi-lsp.lua
+local install_dir = vim.fn.stdpath("data") .. "/oapi-lsp"
+local bin = install_dir .. (vim.fn.has("win32") == 1 and "/oapi-lsp.exe" or "/oapi-lsp")
+
 return {
   "stardustcrsd3r/oapi-language-server",
   ft = "yaml",
+  build = function()
+    local u = vim.uv.os_uname()
+    local goos = ({ Linux = "linux", Darwin = "darwin", Windows_NT = "windows" })[u.sysname]
+    local arch = ({ x86_64 = "amd64", arm64 = "arm64", aarch64 = "arm64" })[u.machine]
+    local ext = goos == "windows" and "zip" or "tar.gz"
+    local asset = ("oapi-lsp_%s_%s.%s"):format(goos, arch, ext)
+    local url = "https://github.com/stardustcrsd3r/oapi-language-server"
+      .. "/releases/latest/download/" .. asset
+    vim.fn.mkdir(install_dir, "p")
+    local archive = install_dir .. "/" .. asset
+    vim.fn.system({ "curl", "-fsSL", "-o", archive, url })
+    if ext == "zip" then
+      vim.fn.system({ "unzip", "-o", archive, "-d", install_dir })
+    else
+      vim.fn.system({ "tar", "-xzf", archive, "-C", install_dir })
+    end
+    os.remove(archive)
+  end,
   config = function()
     vim.api.nvim_create_autocmd("FileType", {
       pattern = "yaml",
@@ -83,7 +112,7 @@ return {
         end
         vim.lsp.start({
           name = "oapi-lsp",
-          cmd = { "oapi-lsp" },
+          cmd = { bin },
           root_dir = vim.fs.root(args.buf, { ".git" }) or vim.fn.getcwd(),
         }, { bufnr = args.buf })
       end,
@@ -91,6 +120,9 @@ return {
   end,
 }
 ```
+
+> Prefer Go? Drop the `build` function, set `build = "go install ./cmd/oapi-lsp"`,
+> and change `bin` to `vim.fn.expand("$HOME/go/bin/oapi-lsp")`.
 
 ## Other editors
 

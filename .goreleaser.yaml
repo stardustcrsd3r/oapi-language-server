@@ -25,8 +25,8 @@ builds:
 
 archives:
   - id: oapi-lsp
-    # Names map 1:1 to the Mason package.yaml asset list, e.g.
-    # oapi-lsp_darwin_arm64.tar.gz / oapi-lsp_windows_amd64.zip
+    # e.g. oapi-lsp_darwin_arm64.tar.gz / oapi-lsp_windows_amd64.zip — the names
+    # the Neovim build hook in the README downloads from releases/latest.
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:
