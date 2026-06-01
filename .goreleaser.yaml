@@ -1,0 +1,44 @@
+# https://goreleaser.com — `goreleaser check` to validate, `goreleaser release --clean` on a tag.
+version: 2
+project_name: oapi-lsp
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: oapi-lsp
+    main: ./cmd/oapi-lsp
+    binary: oapi-lsp
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/stardustcrsd3r/oapi-language-server/internal/lsp.Version={{ .Version }}
+
+archives:
+  - id: oapi-lsp
+    # Names map 1:1 to the Mason package.yaml asset list, e.g.
+    # oapi-lsp_darwin_arm64.tar.gz / oapi-lsp_windows_amd64.zip
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: stardustcrsd3r
+    name: oapi-language-server

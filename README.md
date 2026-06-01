@@ -42,16 +42,29 @@ A file is treated as a spec when one of its first lines has a top-level
 `openapi:` or `swagger:` key; everything reachable from a spec via `$ref` is
 part of the same navigable workspace.
 
+## Install
+
+- **Neovim via [Mason](https://github.com/mason-org/mason.nvim)** (recommended):
+  `:MasonInstall oapi-lsp`, or list it under `mason-tool-installer`. Mason
+  downloads the prebuilt binary and puts it on Neovim's `PATH`.
+- **Prebuilt binary**: grab the archive for your OS/arch from the
+  [releases page](https://github.com/stardustcrsd3r/oapi-language-server/releases),
+  extract `oapi-lsp`, and put it somewhere on your `PATH`.
+- **From source** (needs Go): `go install
+  github.com/stardustcrsd3r/oapi-language-server/cmd/oapi-lsp@latest` — drops the
+  binary in `$(go env GOPATH)/bin` (usually `~/go/bin`).
+
+Then point any LSP client's command at `oapi-lsp` for YAML files.
+
 ## Quick start (Neovim, recommended)
 
-With [lazy.nvim](https://github.com/folke/lazy.nvim), this single spec installs
-Requires a Go toolchain on `PATH`.
+With [lazy.nvim](https://github.com/folke/lazy.nvim) and the binary installed via
+Mason (or otherwise on `PATH`), this single spec wires it up:
 
 ```lua
 -- ~/.config/nvim/lua/plugins/oapi-lsp.lua
 return {
   "stardustcrsd3r/oapi-language-server",
-  build = "go install ./cmd/oapi-lsp",
   ft = "yaml",
   config = function()
     vim.api.nvim_create_autocmd("FileType", {
@@ -70,7 +83,7 @@ return {
         end
         vim.lsp.start({
           name = "oapi-lsp",
-          cmd = { vim.fn.expand("$HOME/go/bin/oapi-lsp") },
+          cmd = { "oapi-lsp" },
           root_dir = vim.fs.root(args.buf, { ".git" }) or vim.fn.getcwd(),
         }, { bufnr = args.buf })
       end,
@@ -78,16 +91,6 @@ return {
   end,
 }
 ```
-
-## Manual install
-
-```sh
-go install github.com/stardustcrsd3r/oapi-language-server/cmd/oapi-lsp@latest
-```
-
-This puts an `oapi-lsp` binary in `$(go env GOPATH)/bin` (usually `~/go/bin`) —
-make sure that's on your `PATH`, then point any LSP client's command at
-`oapi-lsp` for YAML files.
 
 ## Other editors
 
@@ -131,3 +134,7 @@ Layout:
 
 Built on [`goccy/go-yaml`](https://github.com/goccy/go-yaml) and
 [`tliron/glsp`](https://github.com/tliron/glsp).
+
+## License
+
+[MIT](LICENSE).
