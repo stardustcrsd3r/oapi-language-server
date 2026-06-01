@@ -44,7 +44,12 @@ part of the same navigable workspace.
 
 ## Install
 
-`oapi-lsp` is a single static binary — no runtime needed. Two ways to get it:
+`oapi-lsp` is a single static binary — no runtime needed. Get it one of two ways:
+
+**Prebuilt binary** (no Go) — download the archive for your OS/arch from the
+[releases page](https://github.com/stardustcrsd3r/oapi-language-server/releases),
+extract `oapi-lsp`, and put it on your `PATH` (e.g. `~/.local/bin`). Update by
+downloading a newer release and replacing the file.
 
 **From source** (needs a Go toolchain):
 
@@ -52,22 +57,41 @@ part of the same navigable workspace.
 go install github.com/stardustcrsd3r/oapi-language-server/cmd/oapi-lsp@latest
 ```
 
-Lands in `$(go env GOPATH)/bin` (usually `~/go/bin`); make sure that's on your
-`PATH`. Update by re-running the same command; pin a version with `@v0.1.0`
-instead of `@latest`.
+Lands in `$(go env GOPATH)/bin` (usually `~/go/bin`) — keep that on `PATH`.
+Update by re-running it; pin a version with `@v0.1.0` instead of `@latest`.
 
-**Prebuilt binary** (no Go): download the archive for your OS/arch from the
-[releases page](https://github.com/stardustcrsd3r/oapi-language-server/releases),
-extract `oapi-lsp`, and put it on your `PATH` (e.g. `~/.local/bin`). Update by
-downloading a newer release and replacing the file.
+Either way you end up with an `oapi-lsp` command; point any LSP client at it for
+YAML files.
 
-Then point any LSP client's command at `oapi-lsp` for YAML files.
+## Neovim
 
-## Quick start (Neovim)
+### Binary on `PATH` — any (or no) plugin manager
 
-With [lazy.nvim](https://github.com/folke/lazy.nvim). The `build` step below
-downloads the matching release binary on install and on every `:Lazy update`, so
-you never need Go — to force a re-download, run `:Lazy build oapi-language-server`.
+Once `oapi-lsp` is on `PATH` (from either install above), no plugin is needed —
+this config starts it on OpenAPI/Swagger files:
+
+```lua
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "yaml",
+  callback = function(args)
+    for _, l in ipairs(vim.api.nvim_buf_get_lines(args.buf, 0, 20, false)) do
+      if l:match("^%s*openapi%s*:") or l:match("^%s*swagger%s*:") then
+        vim.lsp.start({
+          name = "oapi-lsp",
+          cmd = { "oapi-lsp" }, -- or an absolute path to the binary
+          root_dir = vim.fs.root(args.buf, { ".git" }) or vim.fn.getcwd(),
+        }, { bufnr = args.buf })
+        return
+      end
+    end
+  end,
+})
+```
+
+### lazy.nvim — auto-download the binary (no Go)
+
+The `build` hook fetches the matching release binary on install and on every
+`:Lazy update` (force a refresh with `:Lazy build oapi-language-server`):
 
 ```lua
 -- ~/.config/nvim/lua/plugins/oapi-lsp.lua
@@ -88,41 +112,22 @@ return {
     vim.fn.mkdir(install_dir, "p")
     local archive = install_dir .. "/" .. asset
     vim.fn.system({ "curl", "-fsSL", "-o", archive, url })
-    if ext == "zip" then
-      vim.fn.system({ "unzip", "-o", archive, "-d", install_dir })
-    else
-      vim.fn.system({ "tar", "-xzf", archive, "-C", install_dir })
-    end
+    vim.fn.system(ext == "zip"
+      and { "unzip", "-o", archive, "-d", install_dir }
+      or { "tar", "-xzf", archive, "-C", install_dir })
     os.remove(archive)
   end,
   config = function()
-    vim.api.nvim_create_autocmd("FileType", {
-      pattern = "yaml",
-      callback = function(args)
-        local head = vim.api.nvim_buf_get_lines(args.buf, 0, 20, false)
-        local is_spec = false
-        for _, l in ipairs(head) do
-          if l:match("^%s*openapi%s*:") or l:match("^%s*swagger%s*:") then
-            is_spec = true
-            break
-          end
-        end
-        if not is_spec then
-          return
-        end
-        vim.lsp.start({
-          name = "oapi-lsp",
-          cmd = { bin },
-          root_dir = vim.fs.root(args.buf, { ".git" }) or vim.fn.getcwd(),
-        }, { bufnr = args.buf })
-      end,
-    })
+    -- same FileType autocmd as above, but with cmd = { bin }
   end,
 }
 ```
 
-> Prefer Go? Drop the `build` function, set `build = "go install ./cmd/oapi-lsp"`,
-> and change `bin` to `vim.fn.expand("$HOME/go/bin/oapi-lsp")`.
+### lazy.nvim — build with Go
+
+Same spec, but let Go build it instead of downloading: set
+`build = "go install ./cmd/oapi-lsp"` and `cmd = { vim.fn.expand("$HOME/go/bin/oapi-lsp") }`.
+`:Lazy update` re-runs the build, so the binary tracks the plugin.
 
 ## Other editors
 
