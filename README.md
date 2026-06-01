@@ -118,16 +118,57 @@ return {
     os.remove(archive)
   end,
   config = function()
-    -- same FileType autocmd as above, but with cmd = { bin }
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "yaml",
+      callback = function(args)
+        for _, l in ipairs(vim.api.nvim_buf_get_lines(args.buf, 0, 20, false)) do
+          if l:match("^%s*openapi%s*:") or l:match("^%s*swagger%s*:") then
+            vim.lsp.start({
+              name = "oapi-lsp",
+              cmd = { bin },
+              root_dir = vim.fs.root(args.buf, { ".git" }) or vim.fn.getcwd(),
+            }, { bufnr = args.buf })
+            return
+          end
+        end
+      end,
+    })
   end,
 }
 ```
 
 ### lazy.nvim — build with Go
 
-Same spec, but let Go build it instead of downloading: set
-`build = "go install ./cmd/oapi-lsp"` and `cmd = { vim.fn.expand("$HOME/go/bin/oapi-lsp") }`.
-`:Lazy update` re-runs the build, so the binary tracks the plugin.
+Lets Go build the binary on install and on every `:Lazy update` (needs a Go
+toolchain), so it tracks the plugin:
+
+```lua
+-- ~/.config/nvim/lua/plugins/oapi-lsp.lua
+local bin = vim.fn.expand("$HOME/go/bin/oapi-lsp")
+
+return {
+  "stardustcrsd3r/oapi-language-server",
+  ft = "yaml",
+  build = "go install ./cmd/oapi-lsp",
+  config = function()
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "yaml",
+      callback = function(args)
+        for _, l in ipairs(vim.api.nvim_buf_get_lines(args.buf, 0, 20, false)) do
+          if l:match("^%s*openapi%s*:") or l:match("^%s*swagger%s*:") then
+            vim.lsp.start({
+              name = "oapi-lsp",
+              cmd = { bin },
+              root_dir = vim.fs.root(args.buf, { ".git" }) or vim.fn.getcwd(),
+            }, { bufnr = args.buf })
+            return
+          end
+        end
+      end,
+    })
+  end,
+}
+```
 
 ## Other editors
 
